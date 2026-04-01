@@ -14,16 +14,26 @@
 ## 무엇인가
 
 `Lucifer_Engine` 은 `Rocket_Spirit` 발사체가 MECO(주엔진 연소 종료) 이후
-궤도 삽입 단계(NOMINAL)에서 인계하는 **궤도 전파·기동·건강도 판정 엔진**이다.
+궤도 삽입 단계(NOMINAL)에서 인계하는 **궤도 삽입·임무 해석·관측 문맥 엔진**이다.
+
+중요:
+
+- **궤도역학 정본 코어**는 장기적으로 [OrbitalCore_Engine](/Users/jazzin/Desktop/00_BRAIN/_staging/OrbitalCore_Engine/README.md) 로 수렴하는 것이 맞다.
+- `Lucifer_Engine` 은 그 위에서
+  - 발사체 handoff,
+  - orbit insertion readiness,
+  - mission-facing orbit interpretation,
+  - planetary / observation context
+  를 담당하는 상위 엔진으로 읽는 것이 가장 자연스럽다.
 
 ```
 Rocket_Spirit NOMINAL 출구 (h=444km, v≈7.6km/s)
         ↓  StateVector 핸드오프
 Lucifer_Engine
-  ├── 케플러 요소 계산 (a, e, i, Ω, ω, ν)
-  ├── 궤도 건강도 판정 (Ω 5개 컴포넌트)
-  ├── 기동 계획 (원형화, 호만 전이, 면 변경, 재진입)
-  ├── 궤도 전파 (Kepler + J2 섭동)
+  ├── 발사체 상태 핸드오프 해석
+  ├── orbit insertion 건강도 판정 (Ω 5개 컴포넌트)
+  ├── mission-facing 기동 계획 해석
+  ├── orbital state reporting / observation context
   └── NOMINAL 도달 판정
 ```
 
@@ -65,8 +75,29 @@ lucifer_engine/
 ├── health/orbit_health.py   — Ω 5요소 건강도 판정
 ├── bridges/
 │   └── rocket_spirit_bridge.py — Rocket_Spirit 어댑터 (duck-type)
+│   └── orbital_core_bridge.py  — OrbitalCore maneuver + propagation + conversion ownership bridge
 └── agent/orbit_agent.py     — OrbitAgent, OrbitChain (SHA-256 감사 추적)
 ```
+
+## 정체성 구분
+
+`Lucifer_Engine` 과 `OrbitalCore_Engine` 은 완전히 같은 역할이 아니다.
+
+- [OrbitalCore_Engine](/Users/jazzin/Desktop/00_BRAIN/_staging/OrbitalCore_Engine/README.md)
+  - 궤도역학 정본 코어
+  - 케플러 전파, J2, drag screening, maneuver geometry
+- `Lucifer_Engine`
+  - 궤도 삽입과 임무 해석 상위 엔진
+  - 발사 후 handoff, mission summary, observation/planet context
+
+즉 장기적으로는 아래 구조가 맞다.
+
+```text
+LaunchVehicle_Stack -> OrbitalCore_Engine -> Lucifer_Engine
+```
+
+현재 Lucifer 안에 남아 있는 orbital math 는
+점진적으로 `OrbitalCore_Engine` adapter 기반으로 정리될 대상이다.
 
 ---
 
@@ -97,6 +128,9 @@ INJECTION → ELLIPTICAL → CIRCULARIZING → CIRCULAR
 
 ## 지원 기동
 
+아래 기동은 현재 Lucifer 안에서도 다루지만,
+장기 ownership 은 `OrbitalCore_Engine` 쪽이 더 자연스럽다.
+
 | 기동 | 설명 | ΔV 기준 |
 |------|------|---------|
 | **원형화 번** | 타원 → 원 궤도 (원지점에서) | 수십~수백 m/s |
@@ -124,7 +158,7 @@ cd Lucifer_Engine
 python -m pytest tests/ -v
 ```
 
-현재 결과: **133 passed**
+현재 결과: **139 passed**
 
 | 섹션 | 내용 |
 |------|------|
@@ -135,6 +169,7 @@ python -m pytest tests/ -v
 | §5 | 전파기 (Kepler, J2, 단일 스텝) |
 | §6 | Rocket_Spirit 브리지 (dict, duck-type, tuple) |
 | §7 | OrbitAgent 통합 + OrbitChain SHA-256 |
+| §8 | OrbitalCore bridge (maneuver + propagation + conversion ownership handoff) |
 
 ---
 
@@ -155,4 +190,6 @@ python -m pytest tests/ -v
                                                      (발사→궤도삽입)   (궤도 운용)
 ```
 
-`Lucifer_Engine` 은 `Rocket_Spirit` 의 **v0.2.0 연동 대상** 엔진이다.
+`Lucifer_Engine` 은 `Rocket_Spirit` 의 **v0.2.0 연동 대상**이며,
+동시에 `OrbitalCore_Engine` 위에서 임무형 해석을 담당하는
+**orbit insertion / mission-observation interpreter** 로 정리되는 것이 맞다.

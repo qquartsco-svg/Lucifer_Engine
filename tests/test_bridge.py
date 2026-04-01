@@ -8,6 +8,15 @@ from lucifer_engine.bridges.rocket_spirit_bridge import (
     optional_rocket_spirit_handoff,
     build_mission_from_rocket_spirit,
 )
+from lucifer_engine.bridges.orbital_core_bridge import (
+    orbital_core_available,
+    state_to_elements_bridge,
+    elements_to_state_bridge,
+    plan_hohmann_bridge,
+    plan_circularization_bridge,
+    step_propagate_bridge,
+)
+from lucifer_engine.contracts.schemas import KeplerElements, OrbitPhase, StateVector
 
 
 # ---------------------------------------------------------------------------
@@ -128,3 +137,81 @@ class TestBuildMission:
         """오류 시 기본값 사용."""
         mission = build_mission_from_rocket_spirit(object())
         assert mission.target_altitude_m >= 200_000.0
+
+
+class TestOrbitalCoreBridge:
+    def test_bridge_availability_is_bool(self):
+        assert isinstance(orbital_core_available(), bool)
+
+    def test_hohmann_bridge_returns_plan(self):
+        mission = MissionProfile(target_altitude_m=444_000.0)
+        plan = plan_hohmann_bridge(R_EARTH + 400_000.0, R_EARTH + 500_000.0, mission)
+        assert plan.total_delta_v_ms >= 0.0
+        assert len(plan.steps) >= 1
+
+    def test_circularization_bridge_returns_plan(self):
+        mission = MissionProfile(target_altitude_m=444_000.0)
+        elem = KeplerElements(
+            a=R_EARTH + 444_000.0,
+            e=0.05,
+            i=math.radians(28.5),
+            raan=0.0,
+            argp=0.0,
+            nu=0.0,
+        )
+        plan = plan_circularization_bridge(elem, mission)
+        assert plan.total_delta_v_ms >= 0.0
+        assert len(plan.steps) >= 1
+
+    def test_step_propagate_bridge_returns_result(self):
+        elem = KeplerElements(
+            a=R_EARTH + 444_000.0,
+            e=0.01,
+            i=math.radians(28.5),
+            raan=0.0,
+            argp=0.0,
+            nu=0.0,
+        )
+        sv = StateVector(
+            x_m=R_EARTH + 444_000.0,
+            y_m=0.0,
+            z_m=444_000.0,
+            vx_ms=0.0,
+            vy_ms=7_650.0,
+            vz_ms=0.0,
+            t_s=0.0,
+            mass_kg=1000.0,
+        )
+        result = step_propagate_bridge(elem, sv, 60.0, OrbitPhase.CIRCULAR, use_j2=True)
+        assert result.t_s >= 60.0
+        assert result.state.mass_kg == 1000.0
+        assert result.elements.a > 0.0
+
+    def test_state_to_elements_bridge_returns_elements(self):
+        sv = StateVector(
+            x_m=R_EARTH + 444_000.0,
+            y_m=0.0,
+            z_m=444_000.0,
+            vx_ms=0.0,
+            vy_ms=7_650.0,
+            vz_ms=0.0,
+            t_s=0.0,
+            mass_kg=1000.0,
+        )
+        elem = state_to_elements_bridge(sv)
+        assert elem.a > 0.0
+        assert elem.e >= 0.0
+
+    def test_elements_to_state_bridge_returns_state(self):
+        elem = KeplerElements(
+            a=R_EARTH + 444_000.0,
+            e=0.01,
+            i=math.radians(28.5),
+            raan=0.0,
+            argp=0.0,
+            nu=0.0,
+        )
+        sv = elements_to_state_bridge(elem, t_s=10.0, mass_kg=900.0)
+        assert sv.t_s == 10.0
+        assert sv.mass_kg == 900.0
+        assert sv.altitude_m > 0.0

@@ -31,14 +31,17 @@ from lucifer_engine.contracts.schemas import (
     MU_EARTH,
     R_EARTH,
 )
-from lucifer_engine.mechanics.kepler import state_to_elements, elements_to_state
 from lucifer_engine.mechanics.maneuvers import (
-    plan_circularization,
-    plan_hohmann,
     plan_plane_change,
     delta_v_budget,
 )
-from lucifer_engine.mechanics.propagator import step_propagate
+from lucifer_engine.bridges.orbital_core_bridge import (
+    state_to_elements_bridge,
+    elements_to_state_bridge,
+    plan_circularization_bridge,
+    plan_hohmann_bridge,
+    step_propagate_bridge,
+)
 from lucifer_engine.health.orbit_health import assess_orbit_health
 
 # 최소 NOMINAL 조건
@@ -130,7 +133,7 @@ class OrbitAgent:
         """
         self._sv   = sv
         self._t_s  = sv.t_s
-        self._elem = state_to_elements(sv)
+        self._elem = state_to_elements_bridge(sv)
         self._health = assess_orbit_health(
             self._elem,
             phase=OrbitPhase.INJECTION,
@@ -176,7 +179,7 @@ class OrbitAgent:
 
         # 1. 원형화 필요?
         if not self._elem.is_circular and not self._elem.is_escape:
-            circ_plan = plan_circularization(self._elem, self._mission)
+            circ_plan = plan_circularization_bridge(self._elem, self._mission)
             steps.extend(circ_plan.steps)
             total_dv += circ_plan.total_delta_v_ms
 
@@ -185,7 +188,7 @@ class OrbitAgent:
         current_r = self._elem.apoapsis_m
         alt_diff = abs(current_r - target_r)
         if alt_diff > 20_000.0:   # 20km 이상 차이 시 호만
-            hoh_plan = plan_hohmann(current_r, target_r, self._mission)
+            hoh_plan = plan_hohmann_bridge(current_r, target_r, self._mission)
             steps.extend(hoh_plan.steps)
             total_dv += hoh_plan.total_delta_v_ms
 
@@ -235,7 +238,11 @@ class OrbitAgent:
             target_altitude_m=self._mission.target_altitude_m,
         )
 
-        sv_new = elements_to_state(new_elem, t_s=self._t_s, mass_kg=self._sv.mass_kg if self._sv else 0.0)
+        sv_new = elements_to_state_bridge(
+            new_elem,
+            t_s=self._t_s,
+            mass_kg=self._sv.mass_kg if self._sv else 0.0,
+        )
         self._sv = sv_new
 
         self.chain.append("circularization", {
@@ -255,7 +262,7 @@ class OrbitAgent:
         if self._elem is None or self._sv is None:
             raise RuntimeError("inject() 먼저 호출 필요")
 
-        result = step_propagate(
+        result = step_propagate_bridge(
             self._elem, self._sv, dt_s,
             phase=self._phase,
             use_j2=self._use_j2,

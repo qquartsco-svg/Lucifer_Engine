@@ -13,16 +13,23 @@ This engine computes that orbit.
 
 ## What It Is
 
-`Lucifer_Engine` is the **orbital propagation, maneuver planning, and health assessment engine** that takes over from `Rocket_Spirit` at MECO (Main Engine Cut-Off) and orbital insertion (NOMINAL phase).
+`Lucifer_Engine` is the **orbit insertion, mission interpretation, and observation-context engine** that takes over from `Rocket_Spirit` at MECO (Main Engine Cut-Off) and orbital insertion (NOMINAL phase).
+
+Important:
+
+- The long-term **orbital mechanics truth source** should converge toward [OrbitalCore_Engine](/Users/jazzin/Desktop/00_BRAIN/_staging/OrbitalCore_Engine/README.md).
+- `Lucifer_Engine` is best read as the higher layer responsible for
+  launch handoff, insertion readiness, mission-facing orbit interpretation,
+  and planetary / observation context.
 
 ```
 Rocket_Spirit NOMINAL exit (h=444km, v≈7.6km/s)
         ↓  StateVector handoff
 Lucifer_Engine
-  ├── Kepler element calculation (a, e, i, Ω, ω, ν)
-  ├── Orbit health assessment (Ω — 5 components)
-  ├── Maneuver planning (circularize, Hohmann, plane change, deorbit)
-  ├── Orbit propagation (Kepler + J2 perturbation)
+  ├── Launch-state handoff interpretation
+  ├── Orbit insertion health assessment (Ω — 5 components)
+  ├── Mission-facing maneuver interpretation
+  ├── Orbital state reporting / observation context
   └── NOMINAL orbit determination
 ```
 
@@ -64,7 +71,25 @@ lucifer_engine/
 ├── health/orbit_health.py   — Ω 5-component health assessment
 ├── bridges/
 │   └── rocket_spirit_bridge.py — Rocket_Spirit adapter (duck-type)
+│   └── orbital_core_bridge.py  — OrbitalCore maneuver + propagation + conversion bridge
 └── agent/orbit_agent.py     — OrbitAgent, OrbitChain (SHA-256 audit trail)
+```
+
+## Role Split
+
+`Lucifer_Engine` and `OrbitalCore_Engine` should not remain identical in scope.
+
+- [OrbitalCore_Engine](/Users/jazzin/Desktop/00_BRAIN/_staging/OrbitalCore_Engine/README.md)
+  - orbital mechanics truth source
+  - Kepler propagation, J2, drag screening, maneuver geometry
+- `Lucifer_Engine`
+  - orbit insertion + mission interpretation layer
+  - launch handoff, mission summary, observation / planet context
+
+The intended long-term chain is:
+
+```text
+LaunchVehicle_Stack -> OrbitalCore_Engine -> Lucifer_Engine
 ```
 
 ---
@@ -96,6 +121,9 @@ INJECTION → ELLIPTICAL → CIRCULARIZING → CIRCULAR
 
 ## Supported Maneuvers
 
+These maneuvers are still available here, but their long-term numerical ownership
+is more naturally part of `OrbitalCore_Engine`.
+
 | Maneuver | Description | ΔV Reference |
 |----------|-------------|--------------|
 | **Circularization** | Ellipse → circle at apoapsis | Tens to hundreds m/s |
@@ -123,7 +151,7 @@ cd Lucifer_Engine
 python -m pytest tests/ -v
 ```
 
-Current: **133 passed**
+Current: **139 passed**
 
 | Section | Coverage |
 |---------|----------|
@@ -134,6 +162,7 @@ Current: **133 passed**
 | §5 | Propagator (Kepler, J2, single step) |
 | §6 | Rocket_Spirit bridge (dict, duck-type, tuple) |
 | §7 | OrbitAgent integration + OrbitChain SHA-256 |
+| §8 | OrbitalCore bridge (maneuver + propagation + conversion ownership handoff) |
 
 ---
 
@@ -154,4 +183,6 @@ Current: **133 passed**
                                                   (launch→orbit insertion)  (orbit ops)
 ```
 
-`Lucifer_Engine` is the **v0.2.0 integration target** for `Rocket_Spirit`.
+`Lucifer_Engine` is the **v0.2.0 integration target** for `Rocket_Spirit`,
+and should increasingly become the **orbit insertion / mission-observation interpreter**
+that sits above `OrbitalCore_Engine`.
